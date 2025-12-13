@@ -1,9 +1,11 @@
 ---
-allowed-tools: Bash(gh pr view:*), Bash(gh pr checks:*), Bash(gh api:*), Bash(git rev-parse:*), Bash(git log:*), Bash(git worktree:*)
+allowed-tools: Bash(gh pr view:*), Bash(gh pr checks:*), Bash(gh api:*), Bash(git rev-parse:*), Bash(git log:*), Bash(git worktree:*), Bash(gh api repos/*/pulls/*/comments --paginate), Bash(gh api repos/*/issues/*/comments --paginate)
 description: Fetch and summarize PR feedback for the current branch
 ---
 
 Review the feedback on the current branch's PR.
+
+**⚠️ PARAMOUNT RULE: EVERY comment on a PR MUST be acknowledged and responded to. Ignoring reviewer feedback is extremely disrespectful. Before considering this task complete, you MUST verify that 100% of comments have been addressed in the final summary. No exceptions.**
 
 ## Step 1: Identify the PR, Worktree Context, and Latest Commit
 
@@ -80,31 +82,85 @@ This shows all CI checks and their status (pass/fail/pending).
 
 ## Step 3: Fetch ALL PR Data
 
-Use a single `gh pr view` command to get everything:
+**CRITICAL: You MUST fetch and acknowledge EVERY SINGLE comment on the PR. Missing comments is extremely rude to reviewers who took time to provide feedback. This step requires MULTIPLE API calls to ensure nothing is missed.**
+
+### 3a: Get PR Overview
 
 ```bash
-gh pr view {PR_NUMBER} --json title,body,commits,files,reviews,comments,labels,headRefOid,updatedAt
+gh pr view {PR_NUMBER} --json title,body,commits,files,reviews,comments,labels,headRefOid,updatedAt,url
 ```
 
 This retrieves:
 - **title, body**: PR description context
-- **commits**: All commits on the branch (for determining latest SHA)
+- **commits**: All commits on the branch
 - **files**: Changed files list
-- **reviews**: Review comments with inline code feedback + approval state
-- **comments**: General PR conversation/discussion comments
+- **reviews**: Review submissions (approvals, request changes, comments)
+- **comments**: General PR conversation comments
 - **labels**: Any applied labels
 - **headRefOid**: Current HEAD SHA of the PR branch
-- **updatedAt**: Last update timestamp
+- **url**: PR URL for extracting owner/repo
+
+### 3b: Fetch ALL Review Comments (Inline Code Comments)
+
+The `reviews` field from `gh pr view` may not include all inline comments in detail. You MUST also run:
+
+```bash
+gh api repos/{owner}/{repo}/pulls/{PR_NUMBER}/comments --paginate
+```
+
+This returns ALL inline review comments with:
+- `id`: Comment ID (needed for replies)
+- `path`: File path
+- `line` or `original_line`: Line number
+- `body`: The comment text
+- `user.login`: Who wrote it
+- `in_reply_to_id`: If this is a reply to another comment
+
+### 3c: Fetch ALL Issue-Style Comments
+
+```bash
+gh api repos/{owner}/{repo}/issues/{PR_NUMBER}/comments --paginate
+```
+
+This returns conversation-style comments (not inline on code).
+
+### 3d: Verify Comment Count
+
+**COUNT AND VERIFY** - Before proceeding, tally:
+- Total inline review comments from 3b: ___
+- Total conversation comments from 3c: ___
+- Review body comments from reviews in 3a: ___
+- **GRAND TOTAL: ___**
+
+You will use this count to verify you addressed everything in the final summary.
+
+### 3e: Build Master Comment List
+
+Create a comprehensive list combining ALL sources. For each comment, record:
+- **Comment ID** (for replying)
+- **Type**: inline / conversation / review-body
+- **Author**: username
+- **Location**: file:line or "general"
+- **Content**: The actual feedback
+- **Status**: pending / resolved
+
+**DO NOT SKIP ANY COMMENTS. Every single one must appear in your summary table.**
 
 ## Step 4: Present Summary Table
 
-Display all feedback in a table with columns:
-| # | File/Location | Summary | Severity | Status |
-|---|---------------|---------|----------|--------|
+Display ALL feedback in a numbered table. **The row count MUST equal the grand total from Step 3d.**
+
+| # | Author | Type | File/Location | Summary | Severity | Status |
+|---|--------|------|---------------|---------|----------|--------|
 
 Where:
+- **#**: Sequential number (1, 2, 3...) - use this to verify total count
+- **Author**: GitHub username of commenter
+- **Type**: inline / conversation / review-body
 - **Severity**: blocking, suggestion, question, nitpick (infer from content/review state)
 - **Status**: pending, resolved, outdated (based on whether comment is on current commit)
+
+**After creating the table, verify:** "Table shows X comments. Grand total from Step 3d: X. ✅ Match" or "❌ MISMATCH - must find missing comments before proceeding."
 
 ## Step 5: Triage and Estimate Complexity
 
@@ -207,13 +263,24 @@ General PR comments have their own IDs in the `comments` field.
 
 ## Step 11: Final Summary
 
+**VERIFICATION CHECKPOINT**: Before presenting the final summary, verify:
+- Count of items in summary table: ___
+- Grand total from Step 3d: ___
+- **These numbers MUST match.** If they don't, go back and find the missing comments.
+
 After all items are processed, present:
 
-| # | Feedback | Status | GitHub Reply |
-|---|----------|--------|--------------|
-| 1 | Fix null check | ✅ Fixed | Replied: "Addressed in `abc123`" |
-| 2 | Add validation | ✅ Fixed | Replied: "Addressed in `abc123`" |
-| 3 | Refactor auth | ⏭️ Deferred | Replied: "Created task for later" |
-| 4 | Change naming | ❌ Skipped | Replied: "Keeping current convention per project standards" |
+| # | Feedback | Author | Type | Status | GitHub Reply |
+|---|----------|--------|------|--------|--------------|
+| 1 | Fix null check | @reviewer1 | inline | ✅ Fixed | Replied: "Addressed in `abc123`" |
+| 2 | Add validation | @reviewer1 | inline | ✅ Fixed | Replied: "Addressed in `abc123`" |
+| 3 | Refactor auth | @reviewer2 | conversation | ⏭️ Deferred | Replied: "Created task for later" |
+| 4 | Change naming | @reviewer1 | review-body | ❌ Skipped | Replied: "Keeping current convention per project standards" |
 
-This ensures nothing falls through the cracks and reviewers see responses to all their feedback.
+**Final tally:**
+- ✅ Fixed: X comments
+- ⏭️ Deferred: X comments
+- ❌ Skipped (with reply): X comments
+- **TOTAL: X** (must match grand total from Step 3d)
+
+If any comment was not addressed or replied to, **DO NOT consider this task complete**. Every reviewer comment deserves acknowledgment.
