@@ -124,26 +124,31 @@ If all worktrees are active (open PRs or current work), proceed silently to next
 
 ## Step 2.5: Check for Incomplete Plan Files
 
-Before reading project status, check for plan files that may represent unfinished work:
+Before reading project status, check for plan files that may represent unfinished work.
 
-1. **List plan files** in `~/.claude/plans/`
-2. **Filter for current project**: Look for files starting with the project name (e.g., `worldsim-*.md`)
-3. **Check completion status**: Read the first line of each matching file
+**Check BOTH locations:**
+1. **Project plans**: `{project-root}/.claude/plans/` (if it exists)
+2. **Global plans**: `~/.claude/plans/` (filter by project name prefix, e.g., `worldsim-*.md`)
+
+**For each location:**
+1. List all `.md` files
+2. For global plans, filter for current project name prefix
+3. Check completion status by reading the first line:
    - If first line is `# COMPLETE - {date}` → Plan is done, can be archived
    - If first line is NOT a COMPLETE marker → **This is potentially unfinished work**
 
-4. **Present incomplete plans to user**:
+**Present incomplete plans to user**:
 
-   | Plan File | First Line / Title | Modified |
-   |-----------|-------------------|----------|
-   | `worldsim-uber-shader.md` | `# Uber Shader Implementation` | Dec 15 |
-   | `worldsim-clipping.md` | `# Clipping System Plan` | Dec 10 |
+| Location | Plan File | First Line / Title | Modified |
+|----------|-----------|-------------------|----------|
+| project | `uber-shader.md` | `# Uber Shader Implementation` | Dec 15 |
+| global | `worldsim-clipping.md` | `# Clipping System Plan` | Dec 10 |
 
-   Ask: "These plan files don't have a COMPLETE marker. Are any of these still in progress?"
+Ask: "These plan files don't have a COMPLETE marker. Are any of these still in progress?"
 
-5. **If incomplete plans exist**, they should be considered alongside status.md when determining what to work on next.
+**If incomplete plans exist**, they should be considered alongside status.md when determining what to work on next.
 
-Note: Plans with random names (legacy format) should be checked by reading their content to determine which project they belong to.
+**Note**: Plans with random names in the global folder should be checked by reading their content to determine which project they belong to.
 
 ## Step 3: Read Project Status
 
