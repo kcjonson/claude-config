@@ -122,6 +122,29 @@ If all worktrees are active (open PRs or current work), proceed silently to next
 - Create: `git worktree add -b feature/<name> .worktrees/<name>`
 - Remove when done: `git worktree remove .worktrees/<name>`
 
+## Step 2.5: Check for Incomplete Plan Files
+
+Before reading project status, check for plan files that may represent unfinished work:
+
+1. **List plan files** in `~/.claude/plans/`
+2. **Filter for current project**: Look for files starting with the project name (e.g., `worldsim-*.md`)
+3. **Check completion status**: Read the first line of each matching file
+   - If first line is `# COMPLETE - {date}` → Plan is done, can be archived
+   - If first line is NOT a COMPLETE marker → **This is potentially unfinished work**
+
+4. **Present incomplete plans to user**:
+
+   | Plan File | First Line / Title | Modified |
+   |-----------|-------------------|----------|
+   | `worldsim-uber-shader.md` | `# Uber Shader Implementation` | Dec 15 |
+   | `worldsim-clipping.md` | `# Clipping System Plan` | Dec 10 |
+
+   Ask: "These plan files don't have a COMPLETE marker. Are any of these still in progress?"
+
+5. **If incomplete plans exist**, they should be considered alongside status.md when determining what to work on next.
+
+Note: Plans with random names (legacy format) should be checked by reading their content to determine which project they belong to.
+
 ## Step 3: Read Project Status
 
 Look for a status/tracking file (check CLAUDE.md for location, default `/docs/status.md`):
