@@ -1,11 +1,13 @@
 # Ignore everything by default
 *
 
+# Allow root files
+!.gitignore
+!CLAUDE.md
+!README.md
+
 # Allow these directories and their contents
 !/commands/
 !/commands/**
 !/scripts/
 !/scripts/**
-
-# Allow gitignore itself
-!.gitignore
