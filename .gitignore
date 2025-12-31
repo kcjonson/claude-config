@@ -4,6 +4,7 @@
 # Allow root files
 !.gitignore
 !CLAUDE.md
+!LICENSE
 !README.md
 
 # Allow these directories and their contents
