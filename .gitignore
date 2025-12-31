@@ -1,0 +1,11 @@
+# Ignore everything by default
+*
+
+# Allow these directories and their contents
+!/commands/
+!/commands/**
+!/scripts/
+!/scripts/**
+
+# Allow gitignore itself
+!.gitignore

@@ -1,5 +1,5 @@
 ---
-allowed-tools: Bash(gh pr view:*), Bash(gh pr checks:*), Bash(gh api:*), Bash(git rev-parse:*), Bash(git log:*), Bash(git worktree:*), Bash(gh api repos/*/pulls/*/comments --paginate), Bash(gh api repos/*/issues/*/comments --paginate)
+allowed-tools: Bash(gh pr view:*), Bash(gh pr checks:*), Bash(gh api:*), Bash(git rev-parse:*), Bash(git log:*), Bash(git worktree:*), Bash(gh api repos/*/pulls/*/comments --paginate), Bash(gh api repos/*/issues/*/comments --paginate), Bash(node ~/.claude/scripts/fetch-pr-comments.js:*), Bash(node ~/.claude/scripts/reply-pr-comments.js:*), Bash(echo *:*)
 description: Fetch and summarize PR feedback for the current branch
 ---
 
@@ -80,69 +80,55 @@ This shows all CI checks and their status (pass/fail/pending).
 
 **Why CI first:** Reviewers often won't look at a PR with failing CI. Fixing CI failures may also resolve some review comments (e.g., "this doesn't compile" comments become moot).
 
-## Step 3: Fetch ALL PR Data
+## Step 3: Fetch ALL PR Comments Using Script
 
-**CRITICAL: You MUST fetch and acknowledge EVERY SINGLE comment on the PR. Missing comments is extremely rude to reviewers who took time to provide feedback. This step requires MULTIPLE API calls to ensure nothing is missed.**
+**CRITICAL: Use the fetch-pr-comments.js script to reliably fetch ALL comments. This script ensures nothing is missed.**
 
-### 3a: Get PR Overview
+```bash
+node ~/.claude/scripts/fetch-pr-comments.js --format=markdown
+```
+
+This script:
+- Fetches all reviews, inline comments, conversation comments, and reply threads
+- Groups comments hierarchically by review and file
+- Provides exact comment counts for verification
+- Includes reply API commands for each comment
+- Outputs in markdown format optimized for processing
+
+The output includes:
+- **Stats section**: Total counts you MUST verify against at the end
+- **All Comments section**: Every comment grouped by file, with full body text
+- **Quick Reference Table**: Numbered list of all comments for tracking
+- **Reply API Templates**: Commands to reply to comments
+
+### Alternative: Manual Fetch (if script unavailable)
+
+If the script is not available, fall back to manual API calls:
+
+#### 3a: Get PR Overview
 
 ```bash
 gh pr view {PR_NUMBER} --json title,body,commits,files,reviews,comments,labels,headRefOid,updatedAt,url
 ```
 
-This retrieves:
-- **title, body**: PR description context
-- **commits**: All commits on the branch
-- **files**: Changed files list
-- **reviews**: Review submissions (approvals, request changes, comments)
-- **comments**: General PR conversation comments
-- **labels**: Any applied labels
-- **headRefOid**: Current HEAD SHA of the PR branch
-- **url**: PR URL for extracting owner/repo
-
-### 3b: Fetch ALL Review Comments (Inline Code Comments)
-
-The `reviews` field from `gh pr view` may not include all inline comments in detail. You MUST also run:
+#### 3b: Fetch ALL Review Comments (Inline Code Comments)
 
 ```bash
 gh api repos/{owner}/{repo}/pulls/{PR_NUMBER}/comments --paginate
 ```
 
-This returns ALL inline review comments with:
-- `id`: Comment ID (needed for replies)
-- `path`: File path
-- `line` or `original_line`: Line number
-- `body`: The comment text
-- `user.login`: Who wrote it
-- `in_reply_to_id`: If this is a reply to another comment
-
-### 3c: Fetch ALL Issue-Style Comments
+#### 3c: Fetch ALL Issue-Style Comments
 
 ```bash
 gh api repos/{owner}/{repo}/issues/{PR_NUMBER}/comments --paginate
 ```
 
-This returns conversation-style comments (not inline on code).
-
 ### 3d: Verify Comment Count
 
-**COUNT AND VERIFY** - Before proceeding, tally:
-- Total inline review comments from 3b: ___
-- Total conversation comments from 3c: ___
-- Review body comments from reviews in 3a: ___
+From the script output stats (or manual tally):
 - **GRAND TOTAL: ___**
 
-You will use this count to verify you addressed everything in the final summary.
-
-### 3e: Build Master Comment List
-
-Create a comprehensive list combining ALL sources. For each comment, record:
-- **Comment ID** (for replying)
-- **Type**: inline / conversation / review-body
-- **Author**: username
-- **Location**: file:line or "general"
-- **Content**: The actual feedback
-- **Status**: pending / resolved
+You will use this count to verify you addressed everything in the final summary
 
 **DO NOT SKIP ANY COMMENTS. Every single one must appear in your summary table.**
 
@@ -240,26 +226,52 @@ Before implementing, identify any feedback that seems:
 
 ## Step 10: Close the Loop on GitHub
 
-After addressing each feedback item:
+After addressing feedback items, reply to ALL comments efficiently using the bulk reply script.
 
-### When Fixed:
-Reply to the PR comment thread:
+### Bulk Reply (Recommended)
+
+Build a JSON array of replies and post them all at once:
+
 ```bash
+echo '[
+  {"id": 12345, "body": "Fixed in `abc123`", "type": "inline"},
+  {"id": 67890, "body": "Good catch, updated the validation", "type": "inline"},
+  {"id": 11111, "body": "Thanks for the thorough review!", "type": "conversation"}
+]' | node ~/.claude/scripts/reply-pr-comments.js
+```
+
+Or preview first with `--dry-run`:
+```bash
+echo '[...]' | node ~/.claude/scripts/reply-pr-comments.js --dry-run
+```
+
+**Reply types:**
+- `inline`: Reply to inline code comment (most common)
+- `conversation`: Add new conversation comment
+- `review-body`: Add new conversation comment (for responding to review summaries)
+
+### Single Reply (Alternative)
+
+For individual replies:
+```bash
+# Inline comment reply
 gh api repos/{owner}/{repo}/pulls/{pr}/comments/{comment_id}/replies \
   -f body="Addressed in \`{SHORT_SHA}\`"
+
+# New conversation comment
+gh api repos/{owner}/{repo}/issues/{pr}/comments \
+  -f body="Your message here"
 ```
 
-### When Intentionally Skipped:
-Reply explaining why:
-```bash
-gh api repos/{owner}/{repo}/pulls/{pr}/comments/{comment_id}/replies \
-  -f body="After discussion, we decided to [skip this / handle separately] because [reason]. [Optional: Created issue #X to track this.]"
-```
+### Reply Templates
 
-### Track Comment IDs:
-When fetching feedback, note each comment's ID so you can reply to the correct thread.
-The `reviews` field contains `comments` with `id` fields for inline review comments.
-General PR comments have their own IDs in the `comments` field.
+**When Fixed:**
+- `"Fixed in \`{SHORT_SHA}\`"`
+- `"Updated - {brief description}"`
+
+**When Skipped:**
+- `"Keeping current approach because {reason}"`
+- `"Deferring to follow-up PR - created issue #{N}"`
 
 ## Step 11: Final Summary
 
