@@ -8,8 +8,9 @@ Personal configuration for [Claude Code](https://claude.com/code) - commands, sc
 ~/.claude/
 ├── CLAUDE.md          # Global instructions for Claude (applied to all projects)
 ├── commands/          # Custom slash commands
-│   ├── pr-feedback.md # /pr-feedback - Fetch and address PR review comments
-│   └── whats-next.md  # /whats-next - Identify next piece of work
+│   ├── design-review.md # /design-review - Universal visual design review
+│   ├── pr-feedback.md   # /pr-feedback - Fetch and address PR review comments
+│   └── whats-next.md    # /whats-next - Identify next piece of work
 ├── scripts/           # Helper scripts used by commands
 │   ├── fetch-pr-comments.js  # Fetch all PR comments hierarchically
 │   └── reply-pr-comments.js  # Bulk reply to PR comments
@@ -17,6 +18,21 @@ Personal configuration for [Claude Code](https://claude.com/code) - commands, sc
 ```
 
 ## Commands
+
+### `/design-review`
+
+Reviews UI for visual design quality against universal design principles.
+
+**Covers:**
+- Spatial design (proximity, alignment, visual hierarchy, figure-ground, rhythm)
+- Color & contrast (semantic naming, 4.5:1 minimums, dark mode)
+- Typography (hierarchy, line height, line length, modular scale)
+- Interaction & feedback (hover/focus/disabled states, loading indicators, transition timing)
+- Accessibility (keyboard navigation, focus indicators, touch targets, screen readers)
+- Forms (visible labels, inline errors, validation states)
+- Layout responsiveness (overflow, layout shifts, adaptive sizing)
+
+Platform-agnostic — works on any project (web, native, desktop, games).
 
 ### `/pr-feedback`
 
