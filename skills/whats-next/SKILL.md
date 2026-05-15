@@ -1,6 +1,6 @@
 ---
+description: Identify the next best piece of work to start — checks open PRs, stale worktrees, incomplete plan files, and project status docs, then prepares to begin. Use when the user asks "what's next", "what should I work on", or wants to pick up where they left off.
 allowed-tools: Bash(git status:*), Bash(git branch:*), Bash(git log:*), Bash(git checkout:*), Bash(git push:*), Bash(git worktree:*), Bash(git rev-parse:*), Bash(gh pr list:*), Bash(gh pr view:*), Glob, Grep, Read
-description: Identify and start the next piece of work
 ---
 
 Help identify what to work on next and prepare to start.
@@ -30,7 +30,7 @@ Before using defaults, check if the project's CLAUDE.md specifies:
    git worktree list
    ```
 
-3. Note the current working directory and branch - this defines what THIS instance should work on.
+3. Note the current working directory and branch. This defines what THIS instance should work on.
 
 ### 2b: Clean Up Stale Worktrees (if in main checkout)
 
@@ -51,10 +51,10 @@ gh pr list --state all --head <branch-name> --json state,mergedAt,closedAt,title
 
 | PR State | Meaning | Action |
 |----------|---------|--------|
-| **Merged** | Work completed and in main | ✅ Safe to remove |
-| **Closed (not merged)** | PR was abandoned/rejected | ⚠️ Ask user - might be intentionally kept |
-| **Open** | Work in progress | Keep - do not remove |
-| **No PR exists** | Branch exists but no PR created | ⚠️ Check `git branch --merged` as fallback |
+| **Merged** | Work completed and in main | Safe to remove |
+| **Closed (not merged)** | PR was abandoned/rejected | Ask user, might be intentionally kept |
+| **Open** | Work in progress | Keep, do not remove |
+| **No PR exists** | Branch exists but no PR created | Check `git branch --merged` as fallback |
 
 #### Present Cleanup Options
 
@@ -62,14 +62,14 @@ gh pr list --state all --head <branch-name> --json state,mergedAt,closedAt,title
 
 | Worktree | Branch | PR Status | Action |
 |----------|--------|-----------|--------|
-| `.worktrees/svg-pipeline` | `feature/svg-pipeline` | ✅ PR #39 merged | Remove? |
-| `.worktrees/old-experiment` | `feature/experiment` | ❌ PR #35 closed (not merged) | Remove? |
+| `.worktrees/svg-pipeline` | `feature/svg-pipeline` | PR #39 merged | Remove? |
+| `.worktrees/old-experiment` | `feature/experiment` | PR #35 closed (not merged) | Remove? |
 
-**⚠️ Warning - Branches without PRs:**
+**Warning - Branches without PRs:**
 
 | Worktree | Branch | Git Status | Concern |
 |----------|--------|------------|---------|
-| `.worktrees/forgotten-work` | `feature/forgotten` | Not merged to main | No PR found - is this abandoned work? |
+| `.worktrees/forgotten-work` | `feature/forgotten` | Not merged to main | No PR found, is this abandoned work? |
 
 For branches without PRs:
 - If `git branch --merged main` shows it → Might have been pushed directly, safe to remove

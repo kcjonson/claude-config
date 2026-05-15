@@ -7,8 +7,6 @@
 !LICENSE
 !README.md
 
-# Allow these directories and their contents
-!/commands/
-!/commands/**
-!/scripts/
-!/scripts/**
+# Allow the skills tree
+!/skills/
+!/skills/**

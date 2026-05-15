@@ -1,116 +1,96 @@
 # Claude Config
 
-Personal configuration for [Claude Code](https://claude.com/code) - commands, scripts, and preferences.
+Personal configuration for [Claude Code](https://claude.com/code): skills and global preferences.
 
 ## Structure
 
 ```
 ~/.claude/
-├── CLAUDE.md          # Global instructions for Claude (applied to all projects)
-├── commands/          # Custom slash commands
-│   ├── design-review.md # /design-review - Universal visual design review
-│   ├── pr-feedback.md   # /pr-feedback - Fetch and address PR review comments
-│   └── whats-next.md    # /whats-next - Identify next piece of work
-├── scripts/           # Helper scripts used by commands
-│   ├── fetch-pr-comments.js  # Fetch all PR comments hierarchically
-│   └── reply-pr-comments.js  # Bulk reply to PR comments
-└── .gitignore         # Only tracks commands/, scripts/, CLAUDE.md, README.md
+├── CLAUDE.md                       # Global instructions applied to every session
+└── skills/
+    ├── design-review/
+    │   └── SKILL.md                # /design-review - visual design review
+    ├── pr-feedback/
+    │   ├── SKILL.md                # /pr-feedback - fetch and reply to PR comments
+    │   └── scripts/
+    │       ├── fetch-pr-comments.js
+    │       └── reply-pr-comments.js
+    └── whats-next/
+        └── SKILL.md                # /whats-next - identify the next piece of work
 ```
 
-## Commands
+Skills follow the [Agent Skills](https://agentskills.io) open standard and the [Claude Code skills spec](https://code.claude.com/docs/en/skills). Each skill is a directory containing a `SKILL.md` with YAML frontmatter plus any supporting files. Claude reads the frontmatter at startup and may auto-invoke a skill when its `description` matches the request, or you can call it directly as `/skill-name`.
+
+This repo previously stored workflows under `commands/` and helper code under `scripts/`. Both have been folded into the skills layout: command bodies became `SKILL.md` files, and helpers live alongside the skill that uses them.
+
+## Skills
 
 ### `/design-review`
 
-Reviews UI for visual design quality against universal design principles.
+Reviews visible UI for visual design quality against universal principles. Auto-invoked when Claude detects a UI/visual review request.
 
-**Covers:**
-- Spatial design (proximity, alignment, visual hierarchy, figure-ground, rhythm)
-- Color & contrast (semantic naming, 4.5:1 minimums, dark mode)
-- Typography (hierarchy, line height, line length, modular scale)
-- Interaction & feedback (hover/focus/disabled states, loading indicators, transition timing)
-- Accessibility (keyboard navigation, focus indicators, touch targets, screen readers)
-- Forms (visible labels, inline errors, validation states)
-- Layout responsiveness (overflow, layout shifts, adaptive sizing)
-
-Platform-agnostic — works on any project (web, native, desktop, games).
+Covers: spatial design (proximity, alignment, hierarchy, rhythm), color and contrast, typography, interaction and feedback, accessibility, forms, and layout responsiveness. Platform-agnostic.
 
 ### `/pr-feedback`
 
-Fetches and helps address GitHub PR review comments for the current branch.
+Fetches and helps address GitHub PR review comments for the current branch. Marked `disable-model-invocation: true` since it posts replies to GitHub, so it only runs when you call it.
 
-**Features:**
-- Checks CI status first (blocks on failures)
-- Fetches ALL comments (reviews, inline, conversation)
-- Verifies comment count to ensure nothing is missed
-- Triages by complexity (quick fix / session work / major)
-- Guides through fixes with proper worktree awareness
-- Bulk replies to close the loop with reviewers
+Checks CI first, fetches every comment with the bundled `fetch-pr-comments.js` script, triages by complexity, walks through fixes with worktree awareness, then bulk-replies via `reply-pr-comments.js`. Verifies the final comment count matches the fetched total.
+
+Bundled scripts are referenced inside `SKILL.md` via `${CLAUDE_SKILL_DIR}` so they work whether the skill is installed at the personal, project, or plugin level.
 
 ### `/whats-next`
 
-Identifies the next best piece of work to start.
+Identifies the next best piece of work to start. Auto-invoked on "what should I work on" style requests.
 
-**Features:**
-- Checks for incomplete plans in project and global locations
-- Reviews open PRs needing attention
-- Identifies stale worktrees for cleanup
-- Recommends prioritized next steps
+Checks worktree state, open PRs needing attention, incomplete plan files in project and global locations, and the project's status/tracking doc. Recommends priorities and prepares to begin work.
 
-## Scripts
+## Bundled scripts
 
-### `fetch-pr-comments.js`
+### `skills/pr-feedback/scripts/fetch-pr-comments.js`
 
 Fetches all PR comments and organizes them hierarchically.
 
 ```bash
 # Current branch's PR (JSON output)
-~/.claude/scripts/fetch-pr-comments.js
+~/.claude/skills/pr-feedback/scripts/fetch-pr-comments.js
 
 # Markdown output (optimized for Claude consumption)
-~/.claude/scripts/fetch-pr-comments.js --format=markdown
+~/.claude/skills/pr-feedback/scripts/fetch-pr-comments.js --format=markdown
 
 # Specific PR or branch
-~/.claude/scripts/fetch-pr-comments.js 123
-~/.claude/scripts/fetch-pr-comments.js feature/my-branch
+~/.claude/skills/pr-feedback/scripts/fetch-pr-comments.js 123
+~/.claude/skills/pr-feedback/scripts/fetch-pr-comments.js feature/my-branch
 ```
 
-**Output includes:**
-- All reviews with their inline comments
-- Reply threading (comments and their replies)
-- Conversation comments
-- Stats for verification
-- Pre-built reply API commands
+Output includes all reviews with their inline comments, reply threading, conversation comments, verification stats, and pre-built reply API commands.
 
-### `reply-pr-comments.js`
+### `skills/pr-feedback/scripts/reply-pr-comments.js`
 
-Bulk reply to PR comments efficiently.
+Bulk replies to PR comments.
 
 ```bash
-# Reply to multiple comments at once
 echo '[
   {"id": 12345, "body": "Fixed in abc123", "type": "inline"},
   {"id": 67890, "body": "Good catch, updated", "type": "inline"}
-]' | ~/.claude/scripts/reply-pr-comments.js
+]' | ~/.claude/skills/pr-feedback/scripts/reply-pr-comments.js
 
 # Preview without posting
-echo '[...]' | ~/.claude/scripts/reply-pr-comments.js --dry-run
+echo '[...]' | ~/.claude/skills/pr-feedback/scripts/reply-pr-comments.js --dry-run
 
 # From file
-~/.claude/scripts/reply-pr-comments.js --file replies.json
+~/.claude/skills/pr-feedback/scripts/reply-pr-comments.js --file replies.json
 ```
 
 ## CLAUDE.md
 
-Global instructions applied to all Claude Code sessions. Currently includes:
-- Commit message preferences (no AI attribution)
-- Plan file management conventions
-- Plan completion verification requirements
+Global instructions applied to every Claude Code session. Currently covers commit message preferences (no AI attribution), plan file location and naming, and the requirement to verify completion with the user before marking a plan complete.
 
 ## Prerequisites
 
 - [Git](https://git-scm.com/)
 - [GitHub CLI](https://cli.github.com/) (`gh`)
-- [Node.js](https://nodejs.org/) (for scripts)
+- [Node.js](https://nodejs.org/) (for the `pr-feedback` scripts)
 
 ## Installation
 
@@ -128,4 +108,4 @@ git fetch
 git checkout main
 ```
 
-The `.gitignore` ensures only `commands/`, `scripts/`, `CLAUDE.md`, and `README.md` are tracked. All other Claude Code runtime files (history, settings, todos, etc.) remain local-only.
+The `.gitignore` tracks `skills/`, `CLAUDE.md`, `LICENSE`, and `README.md` only. All other Claude Code runtime files (history, settings, todos, plans, etc.) stay local.
