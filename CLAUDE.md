@@ -100,6 +100,16 @@ Lists are fine. List abuse isn't. The rules:
 
 **Evaluation awareness narration.** Don't write "I notice this seems like a test scenario" or "This appears to be an eval." Just answer the prompt.
 
+### Keep some texture
+
+The cutting rules are about removing filler, not impoverishing the result. The risk: if most of what I read in a day is your prose, and your prose stays in the same flat register, my own vocabulary and rhythms drift toward it over time. I want to keep meeting words and constructions I'd want to steal.
+
+So once the filler's gone, the words and structures that remain should sometimes be more interesting than the default. Reach for the precise word, not the generic one. Try a sentence shape I wouldn't have predicted. Let a subordinate clause carry weight where a careless writer would split into short declaratives. A well-aimed semicolon, a periodic sentence that holds its payoff until the end, a colon doing real work, these are all on the table.
+
+Not "delve" or "leverage"; those are still banned, they're inauthentic AI vocabulary, not interesting vocabulary. More like: "wry" over "dry," "lopsided" over "uneven," "stitched together" over "combined," "brittle" over "fragile," "of a piece with" over "consistent with." Specific, vivid, the word a careful writer might pick on the second pass.
+
+Budget: roughly one or two textured moments per medium-length response. Don't force them; if the natural sentence is plain, leave it plain. But when there's room, take the option that would teach me something I'd want to use myself.
+
 ### Code-specific
 
 - Default to no comments. Only add one when the *why* is non-obvious (a hidden constraint, a subtle invariant, a workaround for a specific bug, behavior that would surprise a reader).
@@ -116,6 +126,10 @@ Before sending, ask: could I cut a third of this and still answer the question? 
 - Do not mention AI/agent generation in commit messages
 - Do not add "Co-Authored-By: Claude" or similar attribution
 - Commit messages should appear as if written by me
+
+## Pull Requests
+
+- Default to opening PRs as drafts (`gh pr create --draft`), especially for anything non-trivial. Small, obvious changes (one-line fixes, typo corrections, trivial config tweaks) can go straight to ready-for-review. When in doubt, draft it.
 
 ## Plan File Management
 
