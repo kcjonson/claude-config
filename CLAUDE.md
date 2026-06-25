@@ -127,9 +127,15 @@ Before sending, ask: could I cut a third of this and still answer the question? 
 - Do not add "Co-Authored-By: Claude" or similar attribution
 - Commit messages should appear as if written by me
 
+## Branch Naming
+
+- Most of my work isn't ticket-based, so don't force a `<type>/TICKET-ID-kebab-title` branch name. When there's no ticket or type, just use a short descriptive branch name.
+- If a ticket (JIRA or Specboard) is already obvious from the context, use the `<type>/TICKET-ID-kebab-title` convention. Don't go searching for one.
+
 ## Pull Requests
 
 - Default to opening PRs as drafts (`gh pr create --draft`), especially for anything non-trivial. Small, obvious changes (one-line fixes, typo corrections, trivial config tweaks) can go straight to ready-for-review. When in doubt, draft it.
+- For visual work, include a few screenshots in the PR to show the change when it makes sense. If screenshots were already taken during the session, reuse those. CSS changes should usually have a screenshot.
 
 ## Plan File Management
 
