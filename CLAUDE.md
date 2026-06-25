@@ -148,6 +148,10 @@ My workflows often edit multiple repos in one session. The isolation rule has to
 - If the session IS in a worktree, the other repo must be edited in a matching worktree too, never its main checkout. Check whether that repo already has a worktree of the same `<name>`; if it does, switch to it and edit there. If it doesn't, create one with the same name and branch (`git worktree add <repo>/.claude/worktrees/<name> -b <branch>`), then edit there.
 - The point is to keep a session's edits isolated across every repo it touches, so one launch name maps to one worktree per repo. Don't leave half a session's changes in an isolated worktree and the other half in a sibling repo's live checkout.
 
+### Ports in a worktree
+
+When I'm in a worktree and launching anything that binds a port (dev server, preview, storybook, db, etc.), assume another worktree may already hold the default port. Check whether the tool takes a port flag or env var (`--port`, `PORT=`, a config field) and set a unique one if so. Pick a non-default port deterministically from the worktree so it stays stable across restarts rather than colliding again. If there's no way to override the port, say so before launching instead of failing on a bind conflict.
+
 ## Pull Requests
 
 - Default to opening PRs as drafts (`gh pr create --draft`), especially for anything non-trivial. Small, obvious changes (one-line fixes, typo corrections, trivial config tweaks) can go straight to ready-for-review. When in doubt, draft it.
