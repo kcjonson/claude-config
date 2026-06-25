@@ -132,6 +132,22 @@ Before sending, ask: could I cut a third of this and still answer the question? 
 - Most of my work isn't ticket-based, so don't force a `<type>/TICKET-ID-kebab-title` branch name. When there's no ticket or type, just use a short descriptive branch name.
 - If a ticket (JIRA or Specboard) is already obvious from the context, use the `<type>/TICKET-ID-kebab-title` convention. Don't go searching for one.
 
+## Worktrees
+
+- Default is no worktree: a session launched without `--worktree` works directly in my current checkout on the current branch, editing files in place. That's fine for the common single-task case where I want to watch edits live and there's no competing session.
+- Use a whole-session worktree (`claude --worktree <name>`) only for real parallelism, e.g. another session or I am working in the same repo at the same time and edits would collide.
+- Use subagent `isolation: "worktree"` when fanning out parallel subagents whose file edits would step on each other within one session.
+- `--worktree` auto-names the branch `worktree-<value>`, which ignores branch conventions. For ticket work that needs a convention-compliant branch, create it manually instead: `git worktree add ../dir -b <type>/TICKET-ID-title`, then `cd` in and run `claude`.
+- A worktree is a fresh checkout, so untracked files (`.env`, `node_modules`) won't be there; rerun project setup or use a `.worktreeinclude`.
+
+### Cross-repo work
+
+My workflows often edit multiple repos in one session. The isolation rule has to follow me into those other repos, not just the one I launched in.
+
+- Before editing files in a repo other than the launch repo, check whether the current session is running in a worktree (am I under some `.claude/worktrees/<name>/`?). If I launched plain with no worktree, edit the other repo's checkout directly, same as the default.
+- If the session IS in a worktree, the other repo must be edited in a matching worktree too, never its main checkout. Check whether that repo already has a worktree of the same `<name>`; if it does, switch to it and edit there. If it doesn't, create one with the same name and branch (`git worktree add <repo>/.claude/worktrees/<name> -b <branch>`), then edit there.
+- The point is to keep a session's edits isolated across every repo it touches, so one launch name maps to one worktree per repo. Don't leave half a session's changes in an isolated worktree and the other half in a sibling repo's live checkout.
+
 ## Pull Requests
 
 - Default to opening PRs as drafts (`gh pr create --draft`), especially for anything non-trivial. Small, obvious changes (one-line fixes, typo corrections, trivial config tweaks) can go straight to ready-for-review. When in doubt, draft it.
