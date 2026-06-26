@@ -4,6 +4,8 @@
 # Allow root files
 !.gitignore
 !CLAUDE.md
+!writing-style.md
+!dev-workflow.md
 !LICENSE
 !README.md
 

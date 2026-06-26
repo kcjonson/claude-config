@@ -6,7 +6,9 @@ Personal configuration for [Claude Code](https://claude.com/code): skills and gl
 
 ```
 ~/.claude/
-├── CLAUDE.md                       # Global instructions applied to every session
+├── CLAUDE.md                       # Global instructions; imports the two files below
+├── writing-style.md                # Prose voice and anti-AI-tell rules
+├── dev-workflow.md                 # Commits, branches, worktrees, PRs, plan files
 └── skills/
     ├── design-review/
     │   └── SKILL.md                # /design-review - visual design review
@@ -84,7 +86,7 @@ echo '[...]' | ~/.claude/skills/pr-feedback/scripts/reply-pr-comments.js --dry-r
 
 ## CLAUDE.md
 
-Global instructions applied to every Claude Code session. Currently covers commit message preferences (no AI attribution), plan file location and naming, and the requirement to verify completion with the user before marking a plan complete.
+Global instructions applied to every Claude Code session. `CLAUDE.md` itself is a thin entry point that `@`-imports two files: `writing-style.md` (prose voice, banned vocabulary, the anti-AI-tell rules) and `dev-workflow.md` (commit message preferences, branch naming, worktree isolation, PR defaults, and plan file location/naming with the requirement to verify completion before marking a plan complete).
 
 ## Prerequisites
 
@@ -94,18 +96,49 @@ Global instructions applied to every Claude Code session. Currently covers commi
 
 ## Installation
 
-This repo lives at `~/.claude/`. Fork and clone as needed:
+This repo is **not** cloned into `~/.claude/`. It lives at a stable path of your choosing, which differs per machine (I have several Macs and a couple of Windows boxes, each with the checkout in a different spot). `~/.claude/` then bridges into it. The bridge is the only thing that varies per machine; everything inside the repo is path-independent.
+
+Why it travels: inside the repo, `CLAUDE.md` imports the other rule files with **relative** paths (`@writing-style.md`, `@dev-workflow.md`), which resolve next to `CLAUDE.md` no matter where the repo sits. So wherever you clone it, the internal chain just works. Only the single hop from `~/.claude` into the repo is machine-specific.
+
+That hop is two pieces:
+
+1. **skills** — `~/.claude/skills` has to point at `<repo>/skills` so Claude Code discovers them.
+2. **instructions** — your real `~/.claude/CLAUDE.md` stays an untracked local file (it holds your private, machine-specific stuff: git identity, test-account credentials, anything you don't want on GitHub) and adds one `@import` line pointing at this repo's `CLAUDE.md`. That one import drags in `writing-style.md` and `dev-workflow.md` too, via the relative chain above.
+
+### macOS / Linux
 
 ```bash
-# If starting fresh (fork first, then clone your fork)
-git clone git@github.com:YOUR_USERNAME/claude-config.git ~/.claude
+git clone git@github.com:YOUR_USERNAME/claude-config.git ~/code/claude-config
+REPO=~/code/claude-config   # wherever you actually cloned it
 
-# If ~/.claude already exists with other files
-cd ~/.claude
-git init
-git remote add origin git@github.com:YOUR_USERNAME/claude-config.git
-git fetch
-git checkout main
+ln -s "$REPO/skills" ~/.claude/skills          # skills bridge
+echo "@$REPO/CLAUDE.md" >> ~/.claude/CLAUDE.md  # instructions bridge
 ```
 
-The `.gitignore` tracks `skills/`, `CLAUDE.md`, `LICENSE`, and `README.md` only. All other Claude Code runtime files (history, settings, todos, plans, etc.) stay local.
+### Windows
+
+Use a directory junction for skills (no admin needed, unlike a symlink), and add the import with forward slashes so the path resolves the same way Claude Code expects:
+
+```powershell
+git clone git@github.com:YOUR_USERNAME/claude-config.git C:\code\claude-config
+$REPO = "C:\code\claude-config"   # wherever you actually cloned it
+
+cmd /c mklink /J "$HOME\.claude\skills" "$REPO\skills"   # skills bridge (junction)
+Add-Content "$HOME\.claude\CLAUDE.md" "@$($REPO -replace '\\','/')/CLAUDE.md"  # instructions bridge
+```
+
+### Adding new rule files
+
+Add a new top-level `.md` here, import it from `CLAUDE.md` with a relative `@name.md`, and it propagates to every machine on the next pull. No bridge changes, because the bridge only ever points at `CLAUDE.md` and `skills/`.
+
+### Per-machine checklist
+
+So nothing gets dropped when wiring up a new computer:
+
+- [ ] Repo cloned to a stable path (survives reboots; not a temp dir)
+- [ ] `~/.claude/skills` resolves to `<repo>/skills` (`readlink ~/.claude/skills` on Unix; `dir "$HOME\.claude"` shows the junction target on Windows)
+- [ ] `~/.claude/CLAUDE.md` exists as a real local file and contains the `@<repo>/CLAUDE.md` line
+- [ ] Your private secrets live only in `~/.claude/CLAUDE.md`, never in this repo
+- [ ] New `.md` rule files are imported from `CLAUDE.md`, not just dropped in the directory
+
+The `.gitignore` tracks `skills/`, `CLAUDE.md`, `writing-style.md`, `dev-workflow.md`, `LICENSE`, and `README.md` only. All other Claude Code runtime files (history, settings, todos, plans, etc.) stay local.
