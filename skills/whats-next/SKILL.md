@@ -1,5 +1,5 @@
 ---
-description: Identify the next best piece of work to start — checks open PRs, stale worktrees, incomplete plan files, and project status docs, then prepares to begin. Use when the user asks "what's next", "what should I work on", or wants to pick up where they left off.
+description: Identify the next best piece of work to start — checks open PRs, stale worktrees, incomplete plan files, and project status docs (or hands off to the Specboard skill for Specboard-tracked repos), then prepares to begin. Use when the user asks "what's next", "what should I work on", or wants to pick up where they left off.
 allowed-tools: Bash(git status:*), Bash(git branch:*), Bash(git log:*), Bash(git checkout:*), Bash(git push:*), Bash(git worktree:*), Bash(git rev-parse:*), Bash(gh pr list:*), Bash(gh pr view:*), Glob, Grep, Read
 ---
 
@@ -8,6 +8,7 @@ Help identify what to work on next and prepare to start.
 ## Step 1: Check CLAUDE.md for Project Overrides
 
 Before using defaults, check if the project's CLAUDE.md specifies:
+- **Work tracking system (explicit opt-in).** If — and only if — the project's CLAUDE.md says work is tracked in Specboard (e.g. it directs you to `/specboard:whats-next`, or otherwise names Specboard as the tracking system), hand the whole flow to the `specboard:whats-next` skill and stop here; that skill owns the Specboard workflow (live board, epics/tasks/bugs, specs, the `specboard:complete` close-out). This is a permanent, per-repo opt-in declared in the repo's own CLAUDE.md. If CLAUDE.md says nothing about Specboard, do **not** go looking for it — no `.mcp.json` sniffing, no MCP probing — just continue with the steps below. Most work/professional repos never mention Specboard and so never touch it.
 - Custom status/tracking file location (default: `/docs/status.md`)
 - Custom development log location (default: `/docs/development-log.md`)
 - Custom docs folder for specs (default: `/docs/`)
