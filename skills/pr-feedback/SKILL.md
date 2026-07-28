@@ -153,6 +153,13 @@ Build one plan table that combines verification, triage, action selection, and p
 
 **SUPER CRITICAL: human reviewer comments carry far more weight than bot output.** A bot flags a missing changelog entry; a human says "this design is wrong" or "you missed a real bug." Default to acting on human feedback. Skipping or deferring a human comment requires a real, defensible reason, and the reply needs to be substantive and respectful, not boilerplate. Bot comments can be skipped or batch-acknowledged with much less ceremony.
 
+**Match the reply tone to who's actually reading it.** The Human? column decides this, so get it right before drafting anything.
+
+- **Human reviewer:** conversational and polite. They spent their own time reading the diff. Thank them where thanks is due, answer in full sentences, and push back respectfully when you disagree.
+- **Bot or automated reviewer** (`[bot]` suffix, Copilot review, CodeRabbit, Sonar, Snyk, a lint gate posting comments): drop the pleasantries. No "thanks for catching this," no "good point," no apologies. Still acknowledge the comment and still state the reasoning, just compressed to the facts: what you did or didn't do, and why. "Fixed in `abc123`." / "Not applying: `tmp` is a documented sentinel, see `docs/foo.md`." / "False positive, the null check is on line 38." Nobody's feelings are involved; don't perform a conversation with a linter.
+
+When you can't tell whether an author is human, treat them as human.
+
 **Watch out for human reviewers asking questions, not requesting changes.** If a human asks "why did you pick this approach?" or "did you consider X?", the right action is usually **Needs your input**, not Fix. You're the assistant, not the PR author; you don't know why they made the design choices they did. Surface those for the author to answer in their own words.
 
 Present the plan in one table:
@@ -235,8 +242,8 @@ Build a JSON array of replies and post them all at once:
 
 ```bash
 echo '[
-  {"id": 12345, "body": "Fixed in `abc123`", "type": "inline"},
-  {"id": 67890, "body": "Good catch, updated the validation", "type": "inline"},
+  {"id": 12345, "body": "Fixed in `abc123`", "type": "inline", "resolve": true},
+  {"id": 67890, "body": "Good catch, updated the validation", "type": "inline", "resolve": true},
   {"id": 11111, "body": "Thanks for the thorough review!", "type": "conversation"}
 ]' | node ${CLAUDE_SKILL_DIR}/scripts/reply-pr-comments.js
 ```
@@ -250,6 +257,8 @@ echo '[...]' | node ${CLAUDE_SKILL_DIR}/scripts/reply-pr-comments.js --dry-run
 - `inline`: Reply to inline code comment (most common)
 - `conversation`: Add new conversation comment
 - `review-body`: Add new conversation comment (for responding to review summaries)
+
+**`"resolve": true`** marks the inline thread resolved once its reply posts. See "Mark conversations resolved" below for when to set it.
 
 ### Single Reply (Alternative)
 
@@ -266,6 +275,8 @@ gh api repos/{owner}/{repo}/issues/{pr}/comments \
 
 ### Reply Templates
 
+Tone follows the Human? column from Step 4: warm and conversational for people, clipped and factual for bots.
+
 **When Fixed:**
 - `"Fixed in \`{SHORT_SHA}\`"`
 - `"Updated - {brief description}"`
@@ -274,10 +285,49 @@ gh api repos/{owner}/{repo}/issues/{pr}/comments \
 - `"Keeping current approach because {reason}"`
 - `"Deferring to follow-up PR - created issue #{N}"`
 
+### Mark Conversations Resolved
+
+Many repos block merge until every review conversation is formally resolved, so a reply alone isn't enough: the thread has to be closed out too.
+
+**Resolve a thread when the conversation is genuinely finished:**
+
+- You made the requested change and replied with the commit SHA.
+- You explained why you're not making the change and there's nothing left for the reviewer to act on (a bot false positive, a documented convention, an out-of-scope note pointing at the follow-up issue).
+- The comment was praise or a question you fully answered.
+
+**Do NOT resolve when:**
+
+- The reply asks the reviewer something, or invites them to weigh in on your pushback. A resolved thread is easy to miss; let them re-open the discussion on their own terms.
+- You deferred substantive human feedback and the reviewer may reasonably object to the deferral.
+- The user chose "merge as-is" and you only posted acknowledgment replies. Nothing was fixed, so nothing is resolved; leave the threads open unless the user says otherwise.
+- You're unsure. Leave it open; an unresolved thread costs a click, a wrongly resolved one buries feedback.
+
+Resolving a human's thread when you pushed back is the common mistake. Fixed-and-replied resolves freely; disagreed-and-replied usually waits for them.
+
+The bulk script handles this with `"resolve": true` on the reply (the thread is resolved only after its reply posts successfully). Thread IDs come from `fetch-pr-comments.js`, which reports each thread's node ID and current resolved state; the script looks them up by comment ID when you don't pass one.
+
+To resolve a thread with no new reply:
+
+```bash
+echo '[{"threadId": "PRRT_kwDO...", "resolve": true}]' \
+  | node ${CLAUDE_SKILL_DIR}/scripts/reply-pr-comments.js
+```
+
+Or directly, since resolution is GraphQL-only:
+
+```bash
+gh api graphql -f query='mutation($threadId:ID!){resolveReviewThread(input:{threadId:$threadId}){thread{id isResolved}}}' \
+  -F threadId='PRRT_kwDO...'
+```
+
+Conversation-level comments (issue comments) have no resolvable thread. Reply and move on.
+
 ## Step 9: Verify and Close Out
 
 The plan table from Step 7 is the record of what was agreed; no need to re-present it. Just verify and report.
 
 **Verification:** count comments handled (fixed + skipped-with-reply + deferred-with-reply) and confirm it equals the grand total from Step 3d. If it doesn't, find the missing comments and address them before declaring done.
 
-**Close out** with a one-line tally, e.g. "Done: 3 fixed, 1 deferred, 1 skipped with reply (5/5 acknowledged)." If any comment was not addressed or replied to, do NOT consider this task complete.
+**Also verify resolution state.** Re-run `fetch-pr-comments.js` (or `gh pr view`) and check the resolved/unresolved thread counts. Every thread you intended to resolve should read resolved; any left open should be one you deliberately left for the reviewer. If a resolve call failed, retry it, since a stray unresolved thread can block merge.
+
+**Close out** with a one-line tally, e.g. "Done: 3 fixed, 1 deferred, 1 skipped with reply (5/5 acknowledged), 4 threads resolved, 1 left open for @reviewer2." If any comment was not addressed or replied to, do NOT consider this task complete.

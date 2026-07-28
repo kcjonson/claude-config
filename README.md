@@ -6,8 +6,9 @@ Personal configuration for [Claude Code](https://claude.com/code): skills and gl
 
 ```
 ~/.claude/
-├── CLAUDE.md                       # Global instructions; imports the two files below
+├── CLAUDE.md                       # Global instructions; imports the three files below
 ├── writing-style.md                # Prose voice and anti-AI-tell rules
+├── response-shape.md               # Response structure: action first, numbered steps, restated state, no estimates
 ├── dev-workflow.md                 # Commits, branches, worktrees, PRs, plan files
 └── skills/
     ├── design-review/
@@ -39,6 +40,8 @@ Fetches and helps address GitHub PR review comments for the current branch. Mark
 
 Checks CI first, fetches every comment with the bundled `fetch-pr-comments.js` script, triages by complexity, walks through fixes with worktree awareness, then bulk-replies via `reply-pr-comments.js`. Verifies the final comment count matches the fetched total.
 
+Reply tone splits by author: polite and conversational with humans, clipped and factual with bots and automated reviewers (acknowledge, state the reasoning, skip the niceties). Finished conversations get marked resolved, since some repos block merge until they are; threads where the reply still needs the reviewer's response stay open.
+
 Bundled scripts are referenced inside `SKILL.md` via `${CLAUDE_SKILL_DIR}` so they work whether the skill is installed at the personal, project, or plugin level.
 
 ### `/whats-next`
@@ -65,15 +68,15 @@ Fetches all PR comments and organizes them hierarchically.
 ~/.claude/skills/pr-feedback/scripts/fetch-pr-comments.js feature/my-branch
 ```
 
-Output includes all reviews with their inline comments, reply threading, conversation comments, verification stats, and pre-built reply API commands.
+Output includes all reviews with their inline comments, reply threading, conversation comments, verification stats, pre-built reply API commands, and each review thread's node ID plus whether it's already resolved.
 
 ### `skills/pr-feedback/scripts/reply-pr-comments.js`
 
-Bulk replies to PR comments.
+Bulk replies to PR comments, and optionally marks their threads resolved (`"resolve": true`, applied only after the reply posts). An entry with a `threadId` and no body resolves without replying.
 
 ```bash
 echo '[
-  {"id": 12345, "body": "Fixed in abc123", "type": "inline"},
+  {"id": 12345, "body": "Fixed in abc123", "type": "inline", "resolve": true},
   {"id": 67890, "body": "Good catch, updated", "type": "inline"}
 ]' | ~/.claude/skills/pr-feedback/scripts/reply-pr-comments.js
 
@@ -86,7 +89,7 @@ echo '[...]' | ~/.claude/skills/pr-feedback/scripts/reply-pr-comments.js --dry-r
 
 ## CLAUDE.md
 
-Global instructions applied to every Claude Code session. `CLAUDE.md` itself is a thin entry point that `@`-imports two files: `writing-style.md` (prose voice, banned vocabulary, the anti-AI-tell rules) and `dev-workflow.md` (commit message preferences, branch naming, worktree isolation, PR defaults, and plan file location/naming with the requirement to verify completion before marking a plan complete).
+Global instructions applied to every Claude Code session. `CLAUDE.md` itself is a thin entry point that `@`-imports three files: `writing-style.md` (prose voice, banned vocabulary, the anti-AI-tell rules), `response-shape.md` (structure rather than voice: lead with the action, number multi-step work, restate where we are each turn, no time estimates, when to break those rules), and `dev-workflow.md` (commit message preferences, branch naming, worktree isolation, PR defaults, and plan file location/naming with the requirement to verify completion before marking a plan complete).
 
 ## Prerequisites
 
@@ -141,4 +144,4 @@ So nothing gets dropped when wiring up a new computer:
 - [ ] Your private secrets live only in `~/.claude/CLAUDE.md`, never in this repo
 - [ ] New `.md` rule files are imported from `CLAUDE.md`, not just dropped in the directory
 
-The `.gitignore` tracks `skills/`, `CLAUDE.md`, `writing-style.md`, `dev-workflow.md`, `LICENSE`, and `README.md` only. All other Claude Code runtime files (history, settings, todos, plans, etc.) stay local.
+The `.gitignore` tracks `skills/`, `CLAUDE.md`, `writing-style.md`, `response-shape.md`, `dev-workflow.md`, `specboard.md`, `LICENSE`, and `README.md` only. All other Claude Code runtime files (history, settings, todos, plans, etc.) stay local.

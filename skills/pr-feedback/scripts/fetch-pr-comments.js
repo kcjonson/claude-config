@@ -37,7 +37,8 @@
  *
  *   // Flat list for easy iteration - every comment in one place
  *   allComments: [
- *     { id, type, author, location, body, isReply, parentId, replyToApi, ... }
+ *     { id, type, author, location, body, isReply, parentId, replyToApi,
+ *       threadId, isThreadResolved, resolveApi, ... }
  *   ],
  *
  *   stats: { ... }
@@ -114,7 +115,69 @@ function fetchIssueComments(repo, prNumber) {
   return execJson(`gh api repos/${repo}/issues/${prNumber}/comments --paginate`);
 }
 
-function buildHierarchy(repo, prNumber, prOverview, reviews, reviewComments, issueComments) {
+const REVIEW_THREADS_QUERY = `query($owner:String!,$name:String!,$pr:Int!,$cursor:String){
+  repository(owner:$owner,name:$name){
+    pullRequest(number:$pr){
+      reviewThreads(first:100, after:$cursor){
+        pageInfo{ hasNextPage endCursor }
+        nodes{
+          id
+          isResolved
+          isOutdated
+          resolvedBy{ login }
+          comments(first:100){ nodes{ databaseId } }
+        }
+      }
+    }
+  }
+}`;
+
+/**
+ * Review-thread resolution state only exists in GraphQL, not the REST comment
+ * payloads, and resolving a thread needs its node ID. Best effort: if the token
+ * lacks GraphQL access we degrade to no resolution info rather than failing.
+ */
+function fetchReviewThreads(repo, prNumber) {
+  const [owner, name] = repo.split('/');
+  const threads = [];
+  let cursor = null;
+
+  try {
+    do {
+      const cursorArg = cursor ? ` -F cursor='${cursor}'` : '';
+      const out = execJson(
+        `gh api graphql -f query='${REVIEW_THREADS_QUERY}' -F owner='${owner}' -F name='${name}' -F pr=${prNumber}${cursorArg}`
+      );
+      const page = out.data?.repository?.pullRequest?.reviewThreads;
+      if (!page) break;
+      threads.push(...(page.nodes || []));
+      cursor = page.pageInfo?.hasNextPage ? page.pageInfo.endCursor : null;
+    } while (cursor);
+  } catch (e) {
+    console.error('Warning: could not fetch review thread state via GraphQL. Resolution status unavailable.');
+    return [];
+  }
+
+  return threads;
+}
+
+function indexThreadsByComment(threads) {
+  const byCommentId = {};
+  for (const thread of threads) {
+    for (const c of thread.comments?.nodes || []) {
+      if (c.databaseId == null) continue;
+      byCommentId[c.databaseId] = {
+        threadId: thread.id,
+        isResolved: thread.isResolved,
+        isOutdated: thread.isOutdated,
+        resolvedBy: thread.resolvedBy?.login || null
+      };
+    }
+  }
+  return byCommentId;
+}
+
+function buildHierarchy(repo, prNumber, prOverview, reviews, reviewComments, issueComments, threadsByComment = {}) {
   const headSha = prOverview.head?.sha;
 
   const result = {
@@ -126,7 +189,9 @@ function buildHierarchy(repo, prNumber, prOverview, reviews, reviewComments, iss
       replyEndpoints: {
         reviewComment: `repos/${repo}/pulls/${prNumber}/comments/{comment_id}/replies`,
         issueComment: `repos/${repo}/issues/${prNumber}/comments`
-      }
+      },
+      // Marking a thread resolved is GraphQL-only and takes the thread node ID
+      resolveMutation: `gh api graphql -f query='mutation($threadId:ID!){resolveReviewThread(input:{threadId:$threadId}){thread{id isResolved}}}' -F threadId={THREAD_ID}`
     },
     pr: {
       number: prOverview.number,
@@ -154,7 +219,9 @@ function buildHierarchy(repo, prNumber, prOverview, reviews, reviewComments, iss
       totalReviewComments: 0,
       totalIssueComments: 0,
       totalReplies: 0,
-      totalAllComments: 0
+      totalAllComments: 0,
+      resolvedThreads: 0,
+      unresolvedThreads: 0
     }
   };
 
@@ -165,8 +232,12 @@ function buildHierarchy(repo, prNumber, prOverview, reviews, reviewComments, iss
   // First pass: index all review comments
   for (const comment of reviewComments) {
     const isOnCurrentCommit = comment.commit_id === headSha;
+    const thread = threadsByComment[comment.id] || {};
 
     allReviewComments[comment.id] = {
+      threadId: thread.threadId || null,
+      isThreadResolved: thread.isResolved ?? null,
+      resolvedBy: thread.resolvedBy || null,
       id: comment.id,
       path: comment.path,
       line: comment.line || comment.original_line,
@@ -257,10 +328,21 @@ function buildHierarchy(repo, prNumber, prOverview, reviews, reviewComments, iss
     }
     result.stats.totalReviewComments++;
 
+    if (comment.threadId) {
+      if (comment.isThreadResolved) {
+        result.stats.resolvedThreads++;
+      } else {
+        result.stats.unresolvedThreads++;
+      }
+    }
+
     // Add to flat list
     result.allComments.push({
       id: comment.id,
       type: 'inline',
+      threadId: comment.threadId,
+      isThreadResolved: comment.isThreadResolved,
+      resolvedBy: comment.resolvedBy,
       reviewId: comment.pullRequestReviewId,
       author: comment.author,
       authorAssociation: comment.authorAssociation,
@@ -276,6 +358,9 @@ function buildHierarchy(repo, prNumber, prOverview, reviews, reviewComments, iss
       isOnCurrentCommit: comment.isOnCurrentCommit,
       // API for replying to this specific comment thread
       replyApi: `gh api repos/${repo}/pulls/${prNumber}/comments/${comment.id}/replies -f body="YOUR_REPLY"`,
+      resolveApi: comment.threadId
+        ? `gh api graphql -f query='mutation($threadId:ID!){resolveReviewThread(input:{threadId:$threadId}){thread{id isResolved}}}' -F threadId='${comment.threadId}'`
+        : null,
       replyCount: Object.keys(comment.replies).length
     });
 
@@ -295,6 +380,8 @@ function buildHierarchy(repo, prNumber, prOverview, reviews, reviewComments, iss
         htmlUrl: reply.htmlUrl,
         isReply: true,
         parentId: comment.id,
+        threadId: comment.threadId,
+        isThreadResolved: comment.isThreadResolved,
         isOnCurrentCommit: reply.isOnCurrentCommit,
         // Replies to replies still use the original comment's thread
         replyApi: `gh api repos/${repo}/pulls/${prNumber}/comments/${comment.id}/replies -f body="YOUR_REPLY"`
@@ -357,6 +444,7 @@ function printSummary(result) {
   console.error(`  Reply threads: ${result.stats.totalReplies}`);
   console.error(`  Conversation comments: ${result.stats.totalIssueComments}`);
   console.error(`  Orphaned comments: ${Object.keys(result.orphanedComments).length}`);
+  console.error(`  Threads: ${result.stats.resolvedThreads} resolved, ${result.stats.unresolvedThreads} unresolved`);
   console.error(`  ─────────────────────`);
   console.error(`  TOTAL ITEMS: ${result.stats.totalAllComments}`);
   console.error('');
@@ -413,6 +501,7 @@ function formatMarkdown(result) {
   lines.push(`- Inline comments: ${stats.totalReviewComments}`);
   lines.push(`- Replies: ${stats.totalReplies}`);
   lines.push(`- Conversation comments: ${stats.totalIssueComments}`);
+  lines.push(`- Review threads: ${stats.resolvedThreads} resolved, ${stats.unresolvedThreads} unresolved`);
   lines.push('');
 
   // Reviews summary
@@ -464,8 +553,9 @@ function formatMarkdown(result) {
       const replyIndicator = c.isReply ? '↳ ' : '';
       const lineInfo = c.line ? `:${c.line}` : '';
       const outdated = c.isOnCurrentCommit ? '' : ' [outdated]';
+      const resolved = c.isThreadResolved ? ' [resolved]' : '';
 
-      lines.push(`${indent}${replyIndicator}**@${c.author}** (${c.type})${outdated}`);
+      lines.push(`${indent}${replyIndicator}**@${c.author}** (${c.type})${outdated}${resolved}`);
 
       // Body - indent and truncate if very long
       const bodyLines = c.body.split('\n');
@@ -482,6 +572,9 @@ function formatMarkdown(result) {
       // Reply command
       if (!c.isReply && c.replyApi) {
         lines.push(`${indent}📝 Reply: \`${c.replyApi.replace('YOUR_REPLY', '...')}\``);
+      }
+      if (!c.isReply && c.threadId) {
+        lines.push(`${indent}🧵 Thread: \`${c.threadId}\` (${c.isThreadResolved ? 'resolved' : 'unresolved'})`);
       }
       lines.push('');
     }
@@ -517,14 +610,17 @@ function formatMarkdown(result) {
   // Summary table for quick reference
   lines.push('## Quick Reference Table');
   lines.push('');
-  lines.push('| # | Author | Type | Location | Status |');
-  lines.push('|---|--------|------|----------|--------|');
+  lines.push('| # | Author | Type | Location | Status | Thread |');
+  lines.push('|---|--------|------|----------|--------|--------|');
 
   let idx = 1;
   for (const c of allComments) {
     const status = c.isOnCurrentCommit ? 'current' : 'outdated';
     const location = c.path ? `\`${c.path}:${c.line || '?'}\`` : 'general';
-    lines.push(`| ${idx} | @${c.author} | ${c.type} | ${location} | ${status} |`);
+    const thread = c.threadId
+      ? `${c.isThreadResolved ? 'resolved' : 'unresolved'} \`${c.threadId}\``
+      : 'n/a';
+    lines.push(`| ${idx} | @${c.author} | ${c.type} | ${location} | ${status} | ${thread} |`);
     idx++;
   }
   lines.push('');
@@ -538,6 +634,9 @@ function formatMarkdown(result) {
   lines.push('');
   lines.push(`# Add new conversation comment:`);
   lines.push(`gh api repos/${meta.repo}/issues/${meta.prNumber}/comments -f body="Your comment"`);
+  lines.push('');
+  lines.push(`# Mark a thread resolved (thread ID from the table above):`);
+  lines.push(meta.resolveMutation.replace('{THREAD_ID}', "'PRRT_xxx'"));
   lines.push('```');
   lines.push('');
 
@@ -632,11 +731,15 @@ function main() {
   const reviews = fetchReviews(repo, prNumber);
   const reviewComments = fetchReviewComments(repo, prNumber);
   const issueComments = fetchIssueComments(repo, prNumber);
+  const reviewThreads = fetchReviewThreads(repo, prNumber);
 
-  console.error(`Raw counts: ${reviews.length} reviews, ${reviewComments.length} review comments, ${issueComments.length} issue comments`);
+  console.error(`Raw counts: ${reviews.length} reviews, ${reviewComments.length} review comments, ${issueComments.length} issue comments, ${reviewThreads.length} threads`);
 
   // Build hierarchical structure
-  const result = buildHierarchy(repo, prNumber, prOverview, reviews, reviewComments, issueComments);
+  const result = buildHierarchy(
+    repo, prNumber, prOverview, reviews, reviewComments, issueComments,
+    indexThreadsByComment(reviewThreads)
+  );
 
   // Print summary to stderr (always, regardless of format)
   printSummary(result);

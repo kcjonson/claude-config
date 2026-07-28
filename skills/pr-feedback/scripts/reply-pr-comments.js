@@ -11,10 +11,11 @@
  *
  * Input format (JSON array via stdin or file):
  * [
- *   { "id": 12345, "body": "Fixed in abc123", "type": "inline" },
+ *   { "id": 12345, "body": "Fixed in abc123", "type": "inline", "resolve": true },
  *   { "id": 67890, "body": "Good catch, updated", "type": "inline" },
  *   { "id": "review-body-111", "body": "Thanks for the review!", "type": "review-body" },
- *   { "id": 99999, "body": "Addressed this concern", "type": "conversation" }
+ *   { "id": 99999, "body": "Addressed this concern", "type": "conversation" },
+ *   { "threadId": "PRRT_kwDO...", "resolve": true }
  * ]
  *
  * Types:
@@ -22,6 +23,12 @@
  *   - inline-reply: Same as inline (replies go to the thread root)
  *   - conversation: Create new issue comment (POST /issues/{pr}/comments)
  *   - review-body: Create new issue comment (POST /issues/{pr}/comments)
+ *
+ * Resolving:
+ *   Set "resolve": true on an inline reply to mark the thread resolved after the
+ *   reply posts. Pass "threadId" if you already have it (fetch-pr-comments.js
+ *   reports it); otherwise it is looked up from the comment id. An entry with a
+ *   threadId and no body resolves without replying.
  *
  * Options:
  *   --dry-run       Preview what would be sent without actually posting
@@ -82,6 +89,65 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+const THREADS_QUERY = `query($owner:String!,$name:String!,$pr:Int!,$cursor:String){
+  repository(owner:$owner,name:$name){
+    pullRequest(number:$pr){
+      reviewThreads(first:100, after:$cursor){
+        pageInfo{ hasNextPage endCursor }
+        nodes{ id isResolved comments(first:100){ nodes{ databaseId } } }
+      }
+    }
+  }
+}`;
+
+let threadCache = null;
+
+/** comment databaseId -> { threadId, isResolved }, fetched once and only if needed. */
+function getThreadMap(repo, prNumber) {
+  if (threadCache) return threadCache;
+
+  const [owner, name] = repo.split('/');
+  threadCache = {};
+  let cursor = null;
+
+  try {
+    do {
+      const cursorArg = cursor ? ` -F cursor='${cursor}'` : '';
+      const out = execJson(
+        `gh api graphql -f query='${THREADS_QUERY}' -F owner='${owner}' -F name='${name}' -F pr=${prNumber}${cursorArg}`
+      );
+      const page = out.data?.repository?.pullRequest?.reviewThreads;
+      if (!page) break;
+      for (const thread of page.nodes || []) {
+        for (const c of thread.comments?.nodes || []) {
+          if (c.databaseId != null) {
+            threadCache[c.databaseId] = { threadId: thread.id, isResolved: thread.isResolved };
+          }
+        }
+      }
+      cursor = page.pageInfo?.hasNextPage ? page.pageInfo.endCursor : null;
+    } while (cursor);
+  } catch (e) {
+    console.error('Warning: could not load review threads via GraphQL; cannot resolve by comment id.');
+  }
+
+  return threadCache;
+}
+
+function resolveThread(threadId, dryRun) {
+  const cmd = `gh api graphql -f query='mutation($threadId:ID!){resolveReviewThread(input:{threadId:$threadId}){thread{id isResolved}}}' -F threadId='${threadId}'`;
+
+  if (dryRun) {
+    return { success: true, dryRun: true, cmd };
+  }
+
+  const result = exec(cmd);
+  if (result.error) {
+    return { success: false, error: result.stderr, cmd };
+  }
+  return { success: true, cmd };
+}
+
 function escapeForShell(str) {
   // Escape for use in single quotes
   return str.replace(/'/g, "'\\''");
@@ -119,9 +185,13 @@ Usage:
 
 Input format (JSON array):
   [
-    { "id": 12345, "body": "Fixed in abc123", "type": "inline" },
-    { "id": 67890, "body": "Addressed", "type": "conversation" }
+    { "id": 12345, "body": "Fixed in abc123", "type": "inline", "resolve": true },
+    { "id": 67890, "body": "Addressed", "type": "conversation" },
+    { "threadId": "PRRT_kwDO...", "resolve": true }
   ]
+
+Set "resolve": true to mark the inline thread resolved after the reply posts.
+An entry with a threadId and no body resolves without replying.
 
 Options:
   --dry-run       Preview without posting
@@ -250,15 +320,24 @@ async function main() {
 
   const results = {
     success: [],
-    failed: []
+    failed: [],
+    resolved: [],
+    resolveFailed: []
   };
 
   for (let i = 0; i < replies.length; i++) {
     const reply = replies[i];
+    const label = `[${i + 1}/${replies.length}]`;
+    const resolveOnly = reply.resolve && !reply.body;
 
-    if (!reply.id || !reply.body) {
-      console.error(`[${i + 1}/${replies.length}] SKIP - Missing id or body`);
+    if (!resolveOnly && (!reply.id || !reply.body)) {
+      console.error(`${label} SKIP - Missing id or body`);
       results.failed.push({ reply, error: 'Missing id or body' });
+      continue;
+    }
+    if (resolveOnly && !reply.threadId && !reply.id) {
+      console.error(`${label} SKIP - resolve needs a threadId or comment id`);
+      results.failed.push({ reply, error: 'Missing threadId and id' });
       continue;
     }
 
@@ -267,21 +346,53 @@ async function main() {
       reply.type = 'inline';
     }
 
-    const result = await postReply(repo, prNumber, reply, args.dryRun);
+    let result = { success: true, skippedPost: true, description: 'resolve only' };
 
-    if (result.success) {
-      const status = args.dryRun ? 'WOULD POST' : 'POSTED';
-      console.error(`[${i + 1}/${replies.length}] ${status}: ${result.description}`);
-      if (args.dryRun) {
-        console.error(`    Command: ${result.cmd}`);
-      } else if (result.url) {
-        console.error(`    URL: ${result.url}`);
+    if (!resolveOnly) {
+      result = await postReply(repo, prNumber, reply, args.dryRun);
+
+      if (result.success) {
+        const status = args.dryRun ? 'WOULD POST' : 'POSTED';
+        console.error(`${label} ${status}: ${result.description}`);
+        if (args.dryRun) {
+          console.error(`    Command: ${result.cmd}`);
+        } else if (result.url) {
+          console.error(`    URL: ${result.url}`);
+        }
+        results.success.push({ reply, result });
+      } else {
+        console.error(`${label} FAILED: ${result.description}`);
+        console.error(`    Error: ${result.error}`);
+        results.failed.push({ reply, error: result.error });
       }
-      results.success.push({ reply, result });
-    } else {
-      console.error(`[${i + 1}/${replies.length}] FAILED: ${result.description}`);
-      console.error(`    Error: ${result.error}`);
-      results.failed.push({ reply, error: result.error });
+    }
+
+    // Resolve the thread only once its reply landed, so a failed post never
+    // leaves a silently-resolved conversation behind.
+    if (reply.resolve && result.success) {
+      let threadId = reply.threadId;
+      if (!threadId) {
+        const commentId = String(reply.id).replace('review-body-', '');
+        threadId = getThreadMap(repo, prNumber)[commentId]?.threadId;
+      }
+
+      if (!threadId) {
+        console.error(`${label} RESOLVE FAILED: no thread found for comment #${reply.id}`);
+        results.resolveFailed.push({ reply, error: 'No thread id for comment' });
+      } else {
+        const res = resolveThread(threadId, args.dryRun);
+        if (res.success) {
+          console.error(`${label} ${args.dryRun ? 'WOULD RESOLVE' : 'RESOLVED'}: thread ${threadId}`);
+          if (args.dryRun) {
+            console.error(`    Command: ${res.cmd}`);
+          }
+          results.resolved.push({ reply, threadId });
+        } else {
+          console.error(`${label} RESOLVE FAILED: thread ${threadId}`);
+          console.error(`    Error: ${res.error}`);
+          results.resolveFailed.push({ reply, threadId, error: res.error });
+        }
+      }
     }
 
     // Delay between requests to avoid rate limiting
@@ -294,6 +405,8 @@ async function main() {
   console.error('\n=== Summary ===');
   console.error(`Success: ${results.success.length}`);
   console.error(`Failed: ${results.failed.length}`);
+  console.error(`Threads resolved: ${results.resolved.length}`);
+  console.error(`Resolve failures: ${results.resolveFailed.length}`);
 
   if (results.failed.length > 0) {
     console.error('\nFailed replies:');
@@ -302,10 +415,17 @@ async function main() {
     }
   }
 
+  if (results.resolveFailed.length > 0) {
+    console.error('\nFailed resolves:');
+    for (const f of results.resolveFailed) {
+      console.error(`  - ID ${f.reply.id ?? f.threadId}: ${f.error}`);
+    }
+  }
+
   // Output results as JSON to stdout
   console.log(JSON.stringify(results, null, 2));
 
-  process.exit(results.failed.length > 0 ? 1 : 0);
+  process.exit(results.failed.length + results.resolveFailed.length > 0 ? 1 : 0);
 }
 
 main().catch(err => {
