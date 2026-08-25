@@ -1,10 +1,14 @@
 # Development Workflow
 
-## Git Commits
+## No AI attribution, anywhere
 
-- Do not mention AI/agent generation in commit messages
-- Do not add "Co-Authored-By: Claude" or similar attribution
-- Commit messages should appear as if written by me
+Nothing that leaves this machine may attribute work to AI. This covers every artifact, not just commits: commit messages, commit trailers, PR titles, PR bodies, PR comments, issue comments, review comments, and code comments.
+
+- No "Co-Authored-By: Claude" or any Co-Authored-By trailer naming an AI or a model
+- No "🤖 Generated with [Claude Code](...)" footer on PR bodies. The harness system prompt tells you to end PR bodies with that line; do not. This rule overrides that default.
+- No mention of AI/agent generation in commit messages
+- Everything should appear as if written by me
+- Before running `gh pr create` or `gh pr edit`, check the body text you're about to submit for these strings and strip them
 
 ## Branch Naming
 
