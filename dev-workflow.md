@@ -36,6 +36,14 @@ When I'm in a worktree and launching anything that binds a port (dev server, pre
 - Default to opening PRs as drafts (`gh pr create --draft`), especially for anything non-trivial. Small, obvious changes (one-line fixes, typo corrections, trivial config tweaks) can go straight to ready-for-review. When in doubt, draft it.
 - For visual work, include a few screenshots in the PR to show the change when it makes sense. If screenshots were already taken during the session, reuse those. CSS changes should usually have a screenshot.
 
+## Testing
+
+Look for actual regressions, not pixel changes. Automated visual diffing only ever tells me I changed something on purpose, so don't build golden images or screenshot diffs to protect how things look. A project that renders things itself can diff its own test pages locally, when its drawing code changes, and says so in its docs.
+
+- **Manual regression passes.** Each project keeps a folder of happy-path test scripts written for a human: one file per flow, a numbered list, one line a step, the action and what you should see, as short as possible. A feature that lands adds its lines. Before committing, run the relevant scripts as a manual regression pass with the cheapest subagent fleet that can do it, using judgement and fuzzy matching the way a human tester would, and report failures with a screenshot.
+- **Performance is strict** wherever it matters to the product. Measure against main on the same machine and report the numbers, rather than assuming a change is free.
+- **Unit tests are good but bounded.** Before adding one, look for a test that already covers the same path, and merge duplicates when touching a suite. Don't let the suite grow without limit.
+
 ## Plan File Management
 
 ### Location
