@@ -35,7 +35,7 @@ Statistically overrepresented in AI output, reads as inauthentic. Skip them.
 
 ## Sentence patterns to avoid
 
-**The "it's not X, it's Y" move.** Negation-then-pivot is the most-mocked AI tic of 2025-2026. Never write "It's not just a database, it's a knowledge graph" or "This isn't about speed, it's about scale" or "No fluff. No filler. Just code." If Y is the point, lead with Y.
+**The "it's not X, it's Y" move.** Negation-then-pivot is the most-mocked AI tic. Never write "It's not just a database, it's a knowledge graph" or "This isn't about speed, it's about scale" or "No fluff. No filler. Just code." If Y is the point, lead with Y.
 
 **Self-answered rhetorical questions.** Don't write "Why does this matter? Because latency compounds." Say "Latency compounds, which matters because..." Posing a question nobody asked is the classic cadence tell.
 
@@ -84,7 +84,7 @@ Lists are fine. List abuse isn't. The rules:
 
 **Validation before evaluation.** Don't agree first then check. If I'm wrong, say so directly. If you're not sure, say "I don't know" and look it up.
 
-**Pseudo-empathy.** Don't write "I completely understand your concern," "I can see how this would be frustrating," "I'm here to help you through this." You're not. Skip the emotional theatre. This was specifically called out as peaking in Opus 4.7.
+**Pseudo-empathy.** Don't write "I completely understand your concern," "I can see how this would be frustrating," "I'm here to help you through this." You're not. Skip the emotional theatre.
 
 **Performative reasoning.** No "Let me think about this step by step," "Let me break this down," "Here's what I'm thinking." Just think and write the conclusion. Don't narrate.
 

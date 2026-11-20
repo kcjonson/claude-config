@@ -63,14 +63,14 @@ gh pr list --state all --head <branch-name> --json state,mergedAt,closedAt,title
 
 | Worktree | Branch | PR Status | Action |
 |----------|--------|-----------|--------|
-| `.worktrees/svg-pipeline` | `feature/svg-pipeline` | PR #39 merged | Remove? |
-| `.worktrees/old-experiment` | `feature/experiment` | PR #35 closed (not merged) | Remove? |
+| `.claude/worktrees/svg-pipeline` | `feature/svg-pipeline` | PR #39 merged | Remove? |
+| `.claude/worktrees/old-experiment` | `feature/experiment` | PR #35 closed (not merged) | Remove? |
 
 **Warning - Branches without PRs:**
 
 | Worktree | Branch | Git Status | Concern |
 |----------|--------|------------|---------|
-| `.worktrees/forgotten-work` | `feature/forgotten` | Not merged to main | No PR found, is this abandoned work? |
+| `.claude/worktrees/forgotten-work` | `feature/forgotten` | Not merged to main | No PR found, is this abandoned work? |
 
 For branches without PRs:
 - If `git branch --merged main` shows it → Might have been pushed directly, safe to remove
@@ -80,7 +80,7 @@ For branches without PRs:
 
 If user confirms removal:
 ```bash
-git worktree remove .worktrees/<name>
+git worktree remove .claude/worktrees/<name>
 git branch -d <branch-name>  # Safe delete (only works if merged)
 # OR
 git branch -D <branch-name>  # Force delete (if closed PR / abandoned)
@@ -105,23 +105,9 @@ If all worktrees are active (open PRs or current work), proceed silently to next
    - Check for unaddressed feedback first
    - Suggest using `/pr-feedback` if there are comments
 
-### Worktree Best Practices
+### Worktrees
 
-**What worktrees share vs don't share:**
-- SHARED: Git object database, refs, remotes
-- NOT SHARED: Working files, index/staging, HEAD
-
-**Key principles:**
-1. **Main checkout = main branch only** - Don't do feature work there
-2. **Small changes OK on main** - Docs, typos, config tweaks can go directly
-3. **Substantial work → worktree** - Anything touching code or multiple files
-4. **Warn about conflicts** - Before editing in main, check if worktrees touch same files
-5. **Keep worktrees fresh** - Periodically rebase feature branches onto main
-
-**Worktree organization:**
-- Location: `.worktrees/<branch-name>/` (hidden subdirectory)
-- Create: `git worktree add -b feature/<name> .worktrees/<name>`
-- Remove when done: `git worktree remove .worktrees/<name>`
+The Worktrees rules in the global instructions decide when to use one. Every worktree lives under its repo at `.claude/worktrees/<name>`, never beside the repo or in the home directory, so they're all in one place.
 
 ## Step 2.5: Check for Incomplete Plan Files
 
@@ -173,7 +159,7 @@ Present findings clearly:
 
 ### Current State
 - Branch: `main` / `feature/xyz`
-- Worktree: main checkout / `.worktrees/<name>`
+- Worktree: main checkout / `.claude/worktrees/<name>`
 - Open PRs: [list or "none"]
 - Uncommitted work: [yes/no]
 
@@ -216,18 +202,12 @@ After user confirms:
 
 ### 6a: Determine Work Location
 
-**If on main checkout and task is substantial:**
-1. Ask: "This looks like substantial work. Create a worktree at `.worktrees/<name>`?"
-2. If yes:
-   ```bash
-   git worktree add -b feature/<name> .worktrees/<name>
-   ```
-3. Inform user: "Worktree created. To work there, open a new terminal at `.worktrees/<name>` or use `cd .worktrees/<name>`"
-4. Note: Claude cannot change directories mid-session, so user needs to start new session in worktree
+**If on the main checkout and another session or the user is working in this repo at the same time:**
+1. Ask: "Another session is active here. Work in a worktree at `.claude/worktrees/<name>`?"
+2. If yes, create it with `git worktree add .claude/worktrees/<name> -b <branch>` (branch per the naming rules), then move this session into it with the `EnterWorktree` tool, passing its `path`.
 
-**If on main checkout and task is trivial:**
-1. Small docs/config changes can proceed directly on main
-2. Warn if other worktrees exist that might touch same files
+**If on the main checkout otherwise:**
+1. Work in place on a branch (6b). Warn if other worktrees touch the same files.
 
 **If already in a worktree:**
 1. Continue working in current worktree

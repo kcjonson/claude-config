@@ -20,8 +20,9 @@ Nothing that leaves this machine may attribute work to AI. This covers every art
 - Default is no worktree: a session launched without `--worktree` works directly in my current checkout on the current branch, editing files in place. That's fine for the common single-task case where I want to watch edits live and there's no competing session.
 - Use a whole-session worktree (`claude --worktree <name>`) only for real parallelism, e.g. another session or I am working in the same repo at the same time and edits would collide.
 - Use subagent `isolation: "worktree"` when fanning out parallel subagents whose file edits would step on each other within one session.
-- `--worktree` auto-names the branch `worktree-<value>`, which ignores branch conventions. For ticket work that needs a convention-compliant branch, create it manually instead: `git worktree add ../dir -b <type>/TICKET-ID-title`, then `cd` in and run `claude`.
-- A worktree is a fresh checkout, so untracked files (`.env`, `node_modules`) won't be there; rerun project setup or use a `.worktreeinclude`.
+- `--worktree` auto-names the branch `worktree-<value>`, which ignores branch conventions. For ticket work that needs a convention-compliant branch, create it manually instead: `git worktree add .claude/worktrees/<name> -b <type>/TICKET-ID-title`, then `cd` in and run `claude`.
+- Every worktree lives under its repo's `.claude/worktrees/<name>`, never beside the repo (`../dir`) or in my home directory, so they're all in one place. Make sure `.claude/worktrees/` is gitignored.
+- A worktree is a fresh checkout with its own build directory and `node_modules`; don't junction or share those between worktrees, since each branch builds different code. Reuse comes from the machine-wide caches (ccache, the vcpkg binary cache, the npm cache). Untracked files (`.env`) won't be there either; rerun project setup or use a `.worktreeinclude`.
 
 ### Cross-repo work
 
