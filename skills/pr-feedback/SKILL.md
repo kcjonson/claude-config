@@ -6,9 +6,9 @@ allowed-tools: Bash(gh pr view:*), Bash(gh pr checks:*), Bash(gh api:*), Bash(gi
 
 Review the feedback on the current branch's PR.
 
-**PARAMOUNT RULE 1: EVERY comment on a PR MUST be acknowledged and responded to. Ignoring reviewer feedback is extremely disrespectful. Before considering this task complete, you MUST verify that 100% of comments have been addressed in the final summary. No exceptions.**
+**Rule 1: every comment on the PR gets acknowledged and a response**, because ignoring a reviewer's feedback is disrespectful. The task isn't done until the handled count matches the grand total (Step 9).
 
-**PARAMOUNT RULE 2: Ask ONCE before doing any fixes. The user's decision is "act on this feedback or merge as-is", a single binary at the start, not per-item approval. Present the complete action plan (every fix, every skip-with-reply, every defer) in one table, then ask for a single "go" or "merge as-is". Once approved, execute the entire plan end-to-end without re-prompting on individual items. Per-item confirmation defeats the point of the skill.**
+**Rule 2: ask once before doing any fixes. The user's decision is "act on this feedback or merge as-is", a single binary at the start, not per-item approval. Present the complete action plan (every fix, every skip-with-reply, every defer) in one table, then ask for a single "go" or "merge as-is". Once approved, execute the entire plan end-to-end without re-prompting on individual items. Per-item confirmation defeats the point of the skill.**
 
 ## Step 1: Identify the PR, Worktree Context, and Latest Commit
 
@@ -85,7 +85,7 @@ This shows all CI checks and their status (pass/fail/pending).
 
 ## Step 3: Fetch ALL PR Comments Using Script
 
-**CRITICAL: Use the bundled fetch script to reliably fetch ALL comments. This ensures nothing is missed.**
+Use the bundled fetch script; it pages through every review, inline comment, and reply thread, so nothing is missed.
 
 ```bash
 node ${CLAUDE_SKILL_DIR}/scripts/fetch-pr-comments.js --format=markdown
@@ -133,7 +133,6 @@ From the script output stats (or manual tally):
 
 You will use this count to verify you addressed everything in the final summary.
 
-**DO NOT SKIP ANY COMMENTS. Every single one must appear in your summary table.**
 
 ## Step 4: Build the Action Plan
 
@@ -151,7 +150,7 @@ Build one plan table that combines verification, triage, action selection, and p
 - **Proposed fix or reply** in concrete terms (the actual code change, or the reply draft). For "Needs your input", leave this blank; it gets filled in after Step 5.
 - **Complexity**: Quick (1-2 files, <20 lines), Session (2-5 files, <100 lines), Major (>5 files or >100 lines).
 
-**SUPER CRITICAL: human reviewer comments carry far more weight than bot output.** A bot flags a missing changelog entry; a human says "this design is wrong" or "you missed a real bug." Default to acting on human feedback. Skipping or deferring a human comment requires a real, defensible reason, and the reply needs to be substantive and respectful, not boilerplate. Bot comments can be skipped or batch-acknowledged with much less ceremony.
+**Human reviewer comments carry far more weight than bot output.** A bot flags a missing changelog entry; a human says "this design is wrong" or "you missed a real bug." Default to acting on human feedback. Skipping or deferring a human comment requires a real, defensible reason, and the reply needs to be substantive and respectful, not boilerplate. Bot comments can be skipped or batch-acknowledged with much less ceremony.
 
 **Match the reply tone to who's actually reading it.** The Human? column decides this, so get it right before drafting anything.
 
